@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes Chat — v1.0.0</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --panel: #111111;
+    --border: #1a3a1a;
+    --green: #00ff41;
+    --green-dim: #00cc33;
+    --green-glow: rgba(0,255,65,0.15);
+    --green-glow-strong: rgba(0,255,65,0.4);
+    --text: #00ff41;
+    --text-dim: #00994d;
+    --text-muted: #004d26;
+    --font: 'Courier New', Courier, monospace;
+    --scanline: rgba(0,255,65,0.03);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      var(--scanline) 2px,
+      var(--scanline) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* CRT flicker */
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    92% { opacity: 1; }
+    93% { opacity: 0.9; }
+    94% { opacity: 1; }
+  }
+  body { animation: flicker 8s infinite; }
+
+  /* Header */
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px var(--green-glow-strong);
+  }
+
+  .logo span {
+    color: var(--text-dim);
+  }
+
+  .version {
+    font-size: 11px;
+    color: var(--text-dim);
+    border: 1px solid var(--text-muted);
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+
+  .status-bar {
+    display: flex;
+    gap: 20px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .status-bar .online {
+    color: var(--green);
+    text-shadow: 0 0 6px var(--green);
+  }
+
+  /* Chat area */
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #chat::-webkit-scrollbar { width: 6px; }
+  #chat::-webkit-scrollbar-track { background: var(--bg); }
+  #chat::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 3px;
+  }
+
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 4px;
+    line-height: 1.6;
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    position: relative;
+  }
+
+  .msg.user {
+    align-self: flex-end;
+    background: var(--green-glow);
+    border: 1px solid var(--green-dim);
+    color: var(--green);
+    border-radius: 4px 4px 0 4px;
+    text-shadow: 0 0 8px var(--green-glow-strong);
+  }
+
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: #33ff66;
+    border-radius: 4px 4px 4px 0;
+  }
+
+  .msg.system {
+    align-self: center;
+    background: transparent;
+    border: 1px solid var(--text-muted);
+    color: var(--text-dim);
+    font-size: 11px;
+    text-align: center;
+    max-width: 90%;
+  }
+
+  .typing {
+    align-self: flex-start;
+    padding: 10px 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px 4px 4px 0;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    background: var(--green);
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: blink 1s infinite;
+  }
+
+  /* Input area */
+  #input-area {
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  #input-area::before {
+    content: '>';
+    color: var(--green);
+    font-size: 16px;
+    line-height: 42px;
+    text-shadow: 0 0 8px var(--green);
+    flex-shrink: 0;
+  }
+
+  #msg {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--green);
+    font-family: var(--font);
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    resize: none;
+    caret-color: var(--green);
+    text-shadow: 0 0 6px var(--green-glow-strong);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  #msg:focus {
+    border-color: var(--green-dim);
+    box-shadow: 0 0 12px var(--green-glow), inset 0 0 8px var(--green-glow);
+  }
+
+  #msg::placeholder {
+    color: var(--text-muted);
+  }
+
+  #send {
+    background: var(--bg);
+    border: 1px solid var(--green-dim);
+    color: var(--green);
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.2s;
+    text-shadow: 0 0 6px var(--green-glow-strong);
+    flex-shrink: 0;
+  }
+
+  #send:hover {
+    background: var(--green-glow);
+    box-shadow: 0 0 16px var(--green-glow), inset 0 0 8px var(--green-glow);
+  }
+
+  #send:active {
+    transform: scale(0.97);
+  }
+
+  /* Glitch effect on title */
+  @keyframes glitch {
+    0%, 94% { clip-path: none; transform: none; }
+    95% {
+      clip-path: polygon(0 10%, 100% 10%, 100% 20%, 0 20%);
+      transform: translate(-2px, 0);
+    }
+    96% {
+      clip-path: polygon(0 60%, 100% 60%, 100% 75%, 0 75%);
+      transform: translate(2px, 0);
+    }
+    97% {
+      clip-path: none;
+      transform: translate(0);
+    }
+  }
+  .logo { animation: glitch 6s infinite; }
+
+  /* Matrix rain column */
+  #matrix-bg {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0.04;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="matrix-bg"></canvas>
+
+<header>
+  <div class="logo">HERMES<span>_</span>TERM <span>v1.0.0</span></div>
+  <div class="status-bar">
+    <span>GATEWAY: <span class="online" id="conn-status">CONNECTING...</span></span>
+    <span id="clock"></span>
+  </div>
+</header>
+
+<div id="chat">
+  <div class="msg system">[SYS] Connection established. Hermes Agent v1.0.0 — 駭客風格初始化完成</div>
+</div>
+
+<div id="input-area">
+  <input type="text" id="msg" placeholder="Enter command..." autocomplete="off" />
+  <button id="send" onclick="sendMsg()">SEND</button>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────
+const GATEWAY_WS = `ws://${window.location.hostname}:9119`;
+
+// ── State ───────────────────────────────────────────────────
+let ws = null;
+let connected = false;
+let msgQueue = [];
+
+function setStatus(text, ok) {
+  document.getElementById('conn-status').textContent = text;
+  document.getElementById('conn-status').className = ok ? 'online' : '';
+}
+
+// ── WebSocket ───────────────────────────────────────────────
+function connect() {
+  setStatus('CONNECTING...', false);
+  try {
+    ws = new WebSocket(GATEWAY_WS);
+
+    ws.onopen = () => {
+      connected = true;
+      setStatus('ONLINE', true);
+      // Flush queue
+      while (msgQueue.length) {
+        wsSend(msgQueue.shift());
+      }
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        appendMsg(data.role || 'assistant', data.content || data.text || '');
+      } catch {
+        appendMsg('assistant', e.data);
+      }
+    };
+
+    ws.onerror = () => setStatus('ERROR', false);
+
+    ws.onclose = () => {
+      connected = false;
+      setStatus('RECONNECTING...', false);
+      setTimeout(connect, 3000);
+    };
+  } catch (err) {
+    setStatus('FAILED', false);
+    setTimeout(connect, 3000);
+  }
+}
+
+function wsSend(payload) {
+  if (!connected || !ws) return;
+  ws.send(JSON.stringify(payload));
+}
+
+// ── Messages ────────────────────────────────────────────────
+const chat = document.getElementById('chat');
+
+function appendMsg(role, text) {
+  // Remove typing indicator
+  const typing = chat.querySelector('.typing');
+  if (typing) typing.remove();
+
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function showTyping() {
+  const div = document.createElement('div');
+  div.className = 'typing';
+  div.id = 'typing';
+  div.innerHTML = 'Hermes is typing<span class="cursor"></span>';
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function sendMsg() {
+  const input = document.getElementById('msg');
+  const text = input.value.trim();
+  if (!text) return;
+
+  appendMsg('user', text);
+  input.value = '';
+  showTyping();
+
+  const payload = { type: 'chat', content: text, role: 'user' };
+  if (connected) {
+    wsSend(payload);
+  } else {
+    msgQueue.push(payload);
+  }
+}
+
+document.getElementById('msg').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMsg();
+  }
+});
+
+// ── Clock ───────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const t = now.toLocaleTimeString('en-US', { hour12: false });
+  document.getElementById('clock').textContent = t;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── Matrix background ───────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('matrix-bg');
+  const ctx = canvas.getContext('2d');
+  let w, h, cols, drops;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cols = Math.floor(w / 14);
+    drops = Array(cols).fill(1);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function draw() {
+    ctx.fillStyle = 'rgba(10,10,10,0.05)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#00ff41';
+    ctx.font = '12px monospace';
+
+    for (let i = 0; i < drops.length; i++) {
+      const char = String.fromCharCode(0x30A0 + Math.random() * 96);
+      ctx.fillText(char, i * 14, drops[i] * 14);
+      if (drops[i] * 14 > h && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+  }
+
+  setInterval(draw, 50);
+})();
+
+// ── Init ─────────────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>
