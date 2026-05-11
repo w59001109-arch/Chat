@@ -412,6 +412,7 @@ const matrixTheme = { base: '#00ff41', head: '#ccffdd' };
     currentAgent = name;
     agentBtn.className = name;
     agentBtn.textContent = name.toUpperCase() + ' ⇄';
+    document.getElementById('logo').textContent = name.toUpperCase();
     const t = THEMES[name] || THEMES.hermes;
     document.documentElement.className = t.cls;
     matrixTheme.base = t.matrix;
