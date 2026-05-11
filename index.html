@@ -16,6 +16,13 @@
       --c:  #00ccff;
       --r:  #ff4141;
       --a:  #ffb347;
+      transition: --g .4s, --gd .4s, --c .4s;
+    }
+    /* CLAUDE theme overrides */
+    :root.theme-claude {
+      --g:  #00bbff;
+      --gd: rgba(0,187,255,.35);
+      --c:  #aa88ff;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -317,6 +324,8 @@
 
 <script>
 // ── Matrix rain ──────────────────────────────────────────────────────────────
+const matrixTheme = { base: '#00ff41', head: '#ccffdd' };
+
 !function () {
   const cv = document.getElementById('mtx');
   const cx = cv.getContext('2d');
@@ -339,7 +348,7 @@
     cx.font = SIZE - 1 + 'px monospace';
     for (let i = 0; i < cols; i++) {
       const ch = CHARS[Math.floor(Math.random() * CHARS.length)];
-      cx.fillStyle = drops[i] === 1 ? '#ccffdd' : '#00ff41';
+      cx.fillStyle = drops[i] === 1 ? matrixTheme.head : matrixTheme.base;
       cx.fillText(ch, i * SIZE, drops[i] * SIZE);
       if (drops[i] * SIZE > cv.height && Math.random() > .975) drops[i] = 0;
       drops[i]++;
@@ -394,10 +403,19 @@
     if (ok) inp.focus();
   }
 
+  const THEMES = {
+    hermes: { cls: 'theme-hermes', matrix: '#00ff41', head: '#ccffdd' },
+    claude: { cls: 'theme-claude', matrix: '#00bbff', head: '#aaddff' },
+  };
+
   function setAgent(name) {
     currentAgent = name;
     agentBtn.className = name;
     agentBtn.textContent = name.toUpperCase() + ' ⇄';
+    const t = THEMES[name] || THEMES.hermes;
+    document.documentElement.className = t.cls;
+    matrixTheme.base = t.matrix;
+    matrixTheme.head = t.head;
   }
 
   // ── Message rendering ──────────────────────────────────────────────────────
