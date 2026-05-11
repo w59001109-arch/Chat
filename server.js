@@ -4,8 +4,16 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { WebSocketServer } = require('ws');
 
+// Ensure ~/.local/bin and common brew paths are in PATH
+process.env.PATH = [
+  process.env.HOME + '/.local/bin',
+  '/usr/local/bin',
+  '/opt/homebrew/bin',
+  process.env.PATH,
+].join(':');
+
 const PORT       = parseInt(process.env.PORT || '3000', 10);
-const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
+const CLAUDE_BIN = process.env.CLAUDE_BIN || 'hermes';
 
 // Strip ANSI escape codes from claude CLI output
 function stripAnsi(s) {
