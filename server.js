@@ -65,8 +65,8 @@ const server = http.createServer((req, res) => {
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
 const AGENTS = {
-  hermes: { bin: CLAUDE_BIN, flag: '-z' },  // hermes uses -z PROMPT
-  claude: { bin: 'claude',   flag: '-p' },  // claude uses -p PROMPT
+  hermes: { bin: CLAUDE_BIN, sub: 'chat', flag: '-z' },  // hermes chat -z PROMPT
+  claude: { bin: 'claude',   sub: null,   flag: '-p' },  // claude -p PROMPT
 };
 
 const wss = new WebSocketServer({ server });
@@ -107,9 +107,11 @@ wss.on('connection', (ws) => {
     busy = true;
     send({ type: 'start' });
 
-    const { bin, flag } = AGENTS[currentAgent];
-    const args = [flag, msg.content.trim()];
+    const { bin, sub, flag } = AGENTS[currentAgent];
+    const args = [];
+    if (sub) args.push(sub);
     if (!isFirst) args.push('--continue');
+    args.push(flag, msg.content.trim());
     isFirst = false;
 
     proc = spawn(bin, args, {
