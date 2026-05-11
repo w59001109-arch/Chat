@@ -19,6 +19,11 @@ const CLAUDE_BIN = process.env.CLAUDE_BIN || 'hermes';
 const TLS_CERT   = process.env.TLS_CERT || '';
 const TLS_KEY    = process.env.TLS_KEY  || '';
 
+// Version = server startup time — changes on every pm2 restart
+const _d = new Date();
+const VERSION = `${_d.getMonth()+1}/${_d.getDate()} ${_d.getHours()}:${String(_d.getMinutes()).padStart(2,'0')}`;
+const VERSION_JSON = JSON.stringify({ version: VERSION });
+
 // ── PNG icon generator — black bg + green "H" glyph ──────────────────────────
 function makeIconPNG(size) {
   const G = [
@@ -122,9 +127,15 @@ function handler(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(MANIFEST);
   }
+  if (url === '/version.json') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return res.end(VERSION_JSON);
+  }
   if (url === '/sw.js') {
     try {
-      const sw = fs.readFileSync(path.join(__dirname, 'sw.js'));
+      // Inject VERSION into SW so browser detects update on every server restart
+      const sw = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8')
+                   .replace('__VERSION__', VERSION);
       res.writeHead(200, { 'Content-Type': 'application/javascript', 'Service-Worker-Allowed': '/' });
       return res.end(sw);
     } catch { res.writeHead(404); return res.end('Not Found'); }

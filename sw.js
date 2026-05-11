@@ -1,5 +1,6 @@
 // Minimal service worker — required for Android PWA install prompt
-const CACHE = 'hermes-v2';
+// __VERSION__ is replaced by server at runtime so SW changes on every restart
+const CACHE = 'hermes-__VERSION__';
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.add('/')));

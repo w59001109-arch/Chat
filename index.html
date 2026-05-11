@@ -121,6 +121,7 @@
     #agent-btn:active { opacity: .6; }
 
     #clk { font-variant-numeric: tabular-nums; }
+    #ver { color: rgba(0,255,65,.35); font-size: 10px; }
 
     #dot {
       width: 7px; height: 7px;
@@ -297,6 +298,7 @@
     <div id="logo">HERMES</div>
     <button id="agent-btn" class="hermes">HERMES ⇄</button>
     <div id="hdr-r">
+      <span id="ver"></span>
       <span id="clk">--:--:--</span>
       <div id="dot"></div>
       <span id="sta">OFFLINE</span>
@@ -493,11 +495,20 @@
     inp.style.height = Math.min(inp.scrollHeight, 100) + 'px';
   });
 
+  // Show version from server
+  fetch('/version.json').then(r => r.json()).then(d => {
+    document.getElementById('ver').textContent = 'v' + d.version;
+  }).catch(() => {});
+
   addMsg('m-s', 'SYS ▸ BOOT', 'INITIALIZING HERMES... CONNECTING TO SERVER...');
   connect();
 
+  // Register SW + auto-reload when new version detected
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.location.reload();
+    });
   }
 }();
 </script>
