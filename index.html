@@ -2,185 +2,467 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hermes Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HERMES">
+  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="/manifest.json">
+  <title>HERMES</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { height: 100%; background: #0a0a0a; color: #00ff41; font-family: 'Courier New', monospace; display: flex; flex-direction: column; }
-    #header { padding: 10px 16px; background: #111; border-bottom: 1px solid #00ff4133; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
-    #status { font-size: 11px; color: #00ff4188; }
-    #status.connected { color: #00ff41; }
-    #status.error { color: #ff4141; }
-    #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-    .msg { max-width: 88%; padding: 8px 12px; border-radius: 3px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-    .msg.user { align-self: flex-end; background: #001a00; border: 1px solid #00ff4144; }
-    .msg.assistant { align-self: flex-start; background: #0a1a0a; border: 1px solid #00ff4133; }
-    .msg.system { align-self: center; background: transparent; border: 1px solid #00ff4133; color: #00ff4188; font-size: 12px; }
-    .msg.error { color: #ff4141; border-color: #ff414144; }
-    .typing { align-self: flex-start; padding: 8px 12px; background: #0a1a0a; border: 1px solid #00ff4133; border-radius: 3px; font-size: 14px; color: #00ff4188; display: none; }
-    .typing.show { display: block; }
-    #input-area { padding: 10px 12px; background: #111; border-top: 1px solid #00ff4133; display: flex; gap: 8px; align-items: flex-end; }
-    #input { flex: 1; background: #0a0a0a; border: 1px solid #00ff4133; border-radius: 3px; color: #00ff41; font-family: 'Courier New', monospace; font-size: 15px; padding: 10px 12px; outline: none; resize: none; line-height: 1.4; max-height: 120px; overflow-y: auto; }
-    #input:focus { border-color: #00ff41; }
-    #input::placeholder { color: #00ff4155; }
-    #send { background: #001a00; border: 1px solid #00ff41; color: #00ff41; font-family: 'Courier New', monospace; font-size: 14px; padding: 10px 16px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
-    #send:hover { background: #002200; }
-    #send:disabled { opacity: 0.4; cursor: not-allowed; }
+    :root {
+      --g:  #00ff41;
+      --gd: rgba(0,255,65,.35);
+      --c:  #00ccff;
+      --r:  #ff4141;
+      --a:  #ffb347;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: #000;
+      color: var(--g);
+      font-family: 'Courier New', 'Lucida Console', monospace;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Matrix rain ─────────────────────────────────────────────────────── */
+    #mtx {
+      position: fixed;
+      inset: 0;
+      opacity: .13;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── CRT scanlines ───────────────────────────────────────────────────── */
+    #scn {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 2px,
+        rgba(0,0,0,.04) 2px,
+        rgba(0,0,0,.04) 4px
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    #app {
+      position: relative;
+      z-index: 2;
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    #hdr {
+      flex-shrink: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 16px;
+      background: rgba(0,0,0,.85);
+      border-bottom: 1px solid var(--gd);
+      backdrop-filter: blur(8px);
+    }
+
+    #logo {
+      font-size: 15px;
+      font-weight: bold;
+      letter-spacing: 6px;
+      text-shadow: 0 0 10px var(--g), 0 0 30px var(--g);
+      animation: glitch 12s infinite;
+    }
+
+    @keyframes glitch {
+      0%,88%,100% {
+        transform: none;
+        text-shadow: 0 0 10px var(--g), 0 0 30px var(--g);
+      }
+      89% { transform: translate(-3px, 0); text-shadow:  3px 0 var(--c), -3px 0 var(--r); }
+      90% { transform: translate( 3px, 0); text-shadow: -3px 0 var(--c),  3px 0 var(--r); }
+      91% { transform: translate(-1px, 0); text-shadow:  0 0 10px var(--g); }
+      92% { transform: none; text-shadow: 0 0 10px var(--g), 0 0 30px var(--g); }
+      94% { transform: translate( 2px,-1px); text-shadow: -2px 0 var(--r); }
+      95% { transform: none; text-shadow: 0 0 10px var(--g), 0 0 30px var(--g); }
+    }
+
+    #hdr-r {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--gd);
+    }
+
+    #clk { font-variant-numeric: tabular-nums; }
+
+    #dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--r);
+      flex-shrink: 0;
+    }
+    #dot.on {
+      background: var(--g);
+      box-shadow: 0 0 7px var(--g);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+    #sta { color: var(--r); }
+    #sta.on { color: var(--g); }
+
+    /* ── Loading bar ─────────────────────────────────────────────────────── */
+    #bar {
+      flex-shrink: 0;
+      height: 2px;
+      position: relative;
+      overflow: hidden;
+    }
+    #bar.on::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, var(--g), transparent);
+      box-shadow: 0 0 8px var(--g);
+      animation: sweep 1.6s ease-in-out infinite;
+    }
+    @keyframes sweep {
+      0%   { width: 0%;  left: 0%; }
+      50%  { width: 60%; left: 20%; }
+      100% { width: 0%;  left: 100%; }
+    }
+
+    /* ── Messages ────────────────────────────────────────────────────────── */
+    #msgs {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 14px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--gd) transparent;
+    }
+    #msgs::-webkit-scrollbar { width: 3px; }
+    #msgs::-webkit-scrollbar-thumb { background: var(--gd); border-radius: 2px; }
+
+    .m { font-size: 14px; line-height: 1.65; }
+
+    .m-box {
+      border: 1px solid;
+      border-radius: 2px;
+    }
+
+    .m-tag {
+      padding: 3px 11px;
+      font-size: 10px;
+      letter-spacing: 2px;
+      border-bottom: 1px solid;
+    }
+
+    .m-body {
+      padding: 9px 11px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    /* user */
+    .m-u { margin-left: 18px; }
+    .m-u .m-box  { border-color: rgba(0,204,255,.22); }
+    .m-u .m-tag  { background: rgba(0,204,255,.06); border-color: rgba(0,204,255,.14); color: var(--c); }
+    .m-u .m-body { color: rgba(0,204,255,.82); }
+
+    /* assistant */
+    .m-a { margin-right: 18px; }
+    .m-a .m-box  { border-color: rgba(0,255,65,.2); }
+    .m-a .m-tag  { background: rgba(0,255,65,.05); border-color: rgba(0,255,65,.12); color: var(--g); text-shadow: 0 0 8px var(--g); }
+    .m-a .m-body { color: rgba(0,255,65,.87); }
+
+    /* system */
+    .m-s .m-box  { border-color: rgba(255,179,71,.18); }
+    .m-s .m-tag  { background: rgba(255,179,71,.04); border-color: rgba(255,179,71,.11); color: var(--a); }
+    .m-s .m-body { color: rgba(255,179,71,.6); font-size: 12px; }
+
+    /* error */
+    .m-e .m-box  { border-color: rgba(255,65,65,.22); }
+    .m-e .m-tag  { background: rgba(255,65,65,.06); border-color: rgba(255,65,65,.14); color: var(--r); }
+    .m-e .m-body { color: rgba(255,65,65,.78); }
+
+    /* blinking cursor in streaming */
+    .cur {
+      display: inline-block;
+      width: 8px; height: 14px;
+      background: var(--g);
+      vertical-align: text-bottom;
+      margin-left: 1px;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* ── Input area ──────────────────────────────────────────────────────── */
+    #inp-wrap {
+      flex-shrink: 0;
+      padding: 10px 14px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--gd);
+      background: rgba(0,0,0,.88);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    .arrow {
+      color: var(--g);
+      font-size: 20px;
+      line-height: 1;
+      padding-bottom: 9px;
+      text-shadow: 0 0 10px var(--g);
+      flex-shrink: 0;
+    }
+
+    #inp {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--gd);
+      color: var(--c);
+      font-family: 'Courier New', monospace;
+      font-size: 15px;
+      padding: 8px 0;
+      outline: none;
+      resize: none;
+      max-height: 100px;
+      line-height: 1.45;
+      caret-color: var(--g);
+    }
+    #inp::placeholder { color: var(--gd); }
+    #inp:focus { border-color: var(--g); }
+    #inp:disabled { opacity: .4; }
+
+    #btn {
+      flex-shrink: 0;
+      background: transparent;
+      border: 1px solid var(--g);
+      color: var(--g);
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      padding: 8px 13px;
+      cursor: pointer;
+      text-shadow: 0 0 7px var(--g);
+      transition: background .15s, box-shadow .15s;
+    }
+    #btn:not(:disabled):active { background: rgba(0,255,65,.12); box-shadow: 0 0 12px var(--gd); }
+    #btn:disabled { opacity: .28; cursor: not-allowed; }
   </style>
 </head>
 <body>
 
-<div id="header">
-  <strong>HERMES</strong>
-  <span id="status" class="error">連線中...</span>
-</div>
+<canvas id="mtx"></canvas>
+<div id="scn"></div>
 
-<div id="messages">
-  <div class="msg system">系統連線中，請稍候...</div>
-</div>
+<div id="app">
+  <div id="hdr">
+    <div id="logo">HERMES</div>
+    <div id="hdr-r">
+      <span id="clk">--:--:--</span>
+      <div id="dot"></div>
+      <span id="sta">OFFLINE</span>
+    </div>
+  </div>
 
-<div id="typing" class="typing">Hermes 思考中...</div>
+  <div id="bar"></div>
+  <div id="msgs"></div>
 
-<div id="input-area">
-  <textarea id="input" placeholder="輸入訊息，按 Enter 傳送" rows="1"></textarea>
-  <button id="send" disabled>送出</button>
+  <div id="inp-wrap">
+    <span class="arrow">›</span>
+    <textarea id="inp" placeholder="輸入指令... (Shift+Enter 換行)" rows="1" disabled></textarea>
+    <button id="btn" disabled>EXEC</button>
+  </div>
 </div>
 
 <script>
-(function() {
-  const PROTO = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const WS_URL = PROTO + '//' + window.location.host;
-  const HTTP_BASE = window.location.protocol + '//' + window.location.host;
+// ── Matrix rain ──────────────────────────────────────────────────────────────
+!function () {
+  const cv = document.getElementById('mtx');
+  const cx = cv.getContext('2d');
+  const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ<>/\\{}[]|';
+  const SIZE = 14;
+  let cols, drops;
 
-  const messages = document.getElementById('messages');
-  const status = document.getElementById('status');
-  const typing = document.getElementById('typing');
-  const input = document.getElementById('input');
-  const sendBtn = document.getElementById('send');
+  function resize() {
+    cv.width  = innerWidth;
+    cv.height = innerHeight;
+    cols  = Math.floor(innerWidth / SIZE);
+    drops = Array(cols).fill(1);
+  }
+  resize();
+  addEventListener('resize', resize);
 
-  let ws = null;
-  let sessionToken = '';
-  let connected = false;
-  let msgId = 0;
+  setInterval(() => {
+    cx.fillStyle = 'rgba(0,0,0,0.05)';
+    cx.fillRect(0, 0, cv.width, cv.height);
+    cx.font = SIZE - 1 + 'px monospace';
+    for (let i = 0; i < cols; i++) {
+      const ch = CHARS[Math.floor(Math.random() * CHARS.length)];
+      cx.fillStyle = drops[i] === 1 ? '#ccffdd' : '#00ff41';
+      cx.fillText(ch, i * SIZE, drops[i] * SIZE);
+      if (drops[i] * SIZE > cv.height && Math.random() > .975) drops[i] = 0;
+      drops[i]++;
+    }
+  }, 50);
+}();
 
-  function log(text, type='system') {
-    const el = document.createElement('div');
-    el.className = 'msg ' + type;
-    el.textContent = text;
-    messages.appendChild(el);
-    messages.scrollTop = messages.scrollHeight;
+// ── Clock ────────────────────────────────────────────────────────────────────
+!function () {
+  const el = document.getElementById('clk');
+  function tick() { el.textContent = new Date().toLocaleTimeString('zh-TW', { hour12: false }); }
+  tick();
+  setInterval(tick, 1000);
+}();
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+!function () {
+  const msgs  = document.getElementById('msgs');
+  const bar   = document.getElementById('bar');
+  const dot   = document.getElementById('dot');
+  const sta   = document.getElementById('sta');
+  const inp   = document.getElementById('inp');
+  const btn   = document.getElementById('btn');
+
+  let ws = null, online = false, busy = false;
+  let stream = null;   // { el, text }
+  let mid = 0;
+
+  // ── State helpers ──────────────────────────────────────────────────────────
+  function setOnline(v) {
+    online = v;
+    dot.className = v ? 'on' : '';
+    sta.className = v ? 'on' : '';
+    sta.textContent = v ? 'ONLINE' : 'OFFLINE';
+    syncInput();
   }
 
-  function setStatus(text, type) {
-    status.textContent = text;
-    status.className = type || '';
+  function setBusy(v) {
+    busy = v;
+    bar.className = v ? 'on' : '';
+    btn.textContent = v ? '···' : 'EXEC';
+    syncInput();
   }
 
-  function sendWs(obj) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(obj));
-    }
+  function syncInput() {
+    const ok = online && !busy;
+    inp.disabled = !ok;
+    btn.disabled = !ok;
+    if (ok) inp.focus();
   }
 
-  function handleWsMessage(data) {
-    typing.classList.remove('show');
-
-    if (data.type === 'token' || data.type === 'auth_ok') {
-      setStatus('已連線', 'connected');
-      log('已連線到 Hermes，開始對話吧！', 'system');
-      return;
-    }
-
-    if (data.type === 'error') {
-      log('錯誤: ' + (data.message || JSON.stringify(data)), 'error');
-      return;
-    }
-
-    if (data.type === 'pong') return;
-
-    if (data.content !== undefined) {
-      log(data.content, data.role === 'user' ? 'user' : 'assistant');
-    } else if (data.text !== undefined) {
-      log(data.text, data.role === 'user' ? 'user' : 'assistant');
-    }
+  // ── Message rendering ──────────────────────────────────────────────────────
+  function addMsg(cls, tag, text) {
+    const w = document.createElement('div'); w.className = 'm ' + cls;
+    const b = document.createElement('div'); b.className = 'm-box';
+    const t = document.createElement('div'); t.className = 'm-tag'; t.textContent = tag;
+    const d = document.createElement('div'); d.className = 'm-body'; d.textContent = text || '';
+    b.append(t, d); w.append(b); msgs.append(w);
+    msgs.scrollTop = msgs.scrollHeight;
+    return d;
   }
 
-  function connectWs() {
-    setStatus('連線中...', 'error');
-    ws = new WebSocket(WS_URL);
+  function startStream() {
+    const w = document.createElement('div'); w.className = 'm m-a';
+    const b = document.createElement('div'); b.className = 'm-box';
+    const t = document.createElement('div'); t.className = 'm-tag'; t.textContent = 'HERMES ▸ PROCESSING';
+    const d = document.createElement('div'); d.className = 'm-body';
+    const c = document.createElement('span'); c.className = 'cur';
+    d.append(c);
+    b.append(t, d); w.append(b); msgs.append(w);
+    stream = { tagEl: t, bodyEl: d, text: '' };
+    msgs.scrollTop = msgs.scrollHeight;
+  }
 
-    ws.onopen = () => {
-      connected = true;
-      sendBtn.disabled = false;
-      setStatus('已連線', 'connected');
-      messages.innerHTML = '';
-      log('已連線，正在準備...', 'system');
-      // Try to authenticate with session token
-      if (sessionToken) {
-        sendWs({ type: 'auth', token: sessionToken });
-      }
-    };
+  function appendStream(chunk) {
+    if (!stream) return;
+    stream.text += chunk;
+    stream.bodyEl.textContent = stream.text;
+    const c = document.createElement('span'); c.className = 'cur';
+    stream.bodyEl.append(c);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
 
-    ws.onmessage = (e) => {
-      let data;
-      try { data = JSON.parse(e.data); } catch { return; }
-      handleWsMessage(data);
-    };
+  function endStream() {
+    if (stream) {
+      stream.bodyEl.textContent = stream.text;
+      stream.tagEl.textContent = 'HERMES ▸ OUTPUT';
+      stream = null;
+    }
+    setBusy(false);
+  }
 
-    ws.onerror = () => setStatus('連線錯誤', 'error');
+  // ── WebSocket ──────────────────────────────────────────────────────────────
+  function handle(d) {
+    if      (d.type === 'system') { addMsg('m-s', 'SYS ▸ INFO',  d.text); setOnline(true); }
+    else if (d.type === 'start')  { startStream(); }
+    else if (d.type === 'delta')  { appendStream(d.text); }
+    else if (d.type === 'done')   { endStream(); }
+    else if (d.type === 'error')  { endStream(); addMsg('m-e', 'SYS ▸ ERROR', d.message); }
+  }
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(proto + '//' + location.host);
+
+    ws.onopen  = () => setOnline(true);
     ws.onclose = () => {
-      connected = false;
-      sendBtn.disabled = true;
-      setStatus('已斷線', 'error');
-      log('連線已斷開，請重新整理', 'error');
+      setOnline(false);
+      endStream();
+      addMsg('m-s', 'SYS ▸ WARN', 'CONNECTION LOST — RECONNECTING IN 3s...');
+      setTimeout(connect, 3000);
+    };
+    ws.onerror = () => setOnline(false);
+    ws.onmessage = (e) => {
+      let d; try { d = JSON.parse(e.data); } catch { return; }
+      handle(d);
     };
   }
 
-  function init() {
-    // Try to get session token from dashboard HTML
-    fetch(HTTP_BASE + '/')
-      .then(r => r.text())
-      .then(html => {
-        const m = html.match(/window\.__HERMES_SESSION_TOKEN__\s*=\s*"([^"])"/);
-        if (m) {
-          sessionToken = m[1];
-          log('取得 session token，等待連線...', 'system');
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        connectWs();
-      });
-
-    // Fallback: try WebSocket anyway
-    setTimeout(() => {
-      if (!connected) connectWs();
-    }, 2000);
-  }
-
+  // ── Send ───────────────────────────────────────────────────────────────────
   function send() {
-    const text = input.value.trim();
-    if (!text || !connected) return;
-    log(text, 'user');
-    input.value = '';
-    typing.classList.add('show');
-    sendWs({ type: 'message', id: ++msgId, content: text, role: 'user' });
+    const text = inp.value.trim();
+    if (!text || !online || busy || !ws || ws.readyState !== 1) return;
+    addMsg('m-u', 'YOU ▸ INPUT', text);
+    inp.value = '';
+    inp.style.height = 'auto';
+    setBusy(true);
+    ws.send(JSON.stringify({ type: 'message', id: ++mid, content: text }));
   }
 
-  sendBtn.addEventListener('click', send);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
+  btn.addEventListener('click', send);
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   });
-  input.addEventListener('input', () => {
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  inp.addEventListener('input', () => {
+    inp.style.height = 'auto';
+    inp.style.height = Math.min(inp.scrollHeight, 100) + 'px';
   });
 
-  init();
-})();
+  addMsg('m-s', 'SYS ▸ BOOT', 'INITIALIZING HERMES... CONNECTING TO SERVER...');
+  connect();
+}();
 </script>
 </body>
 </html>
