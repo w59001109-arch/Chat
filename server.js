@@ -65,8 +65,8 @@ const server = http.createServer((req, res) => {
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
 const AGENTS = {
-  hermes: CLAUDE_BIN,   // hermes binary (default)
-  claude: 'claude',     // plain claude code
+  hermes: { bin: CLAUDE_BIN, flag: '-z' },  // hermes uses -z PROMPT
+  claude: { bin: 'claude',   flag: '-p' },  // claude uses -p PROMPT
 };
 
 const wss = new WebSocketServer({ server });
@@ -107,8 +107,8 @@ wss.on('connection', (ws) => {
     busy = true;
     send({ type: 'start' });
 
-    const bin  = AGENTS[currentAgent];
-    const args = ['-p', msg.content.trim()];
+    const { bin, flag } = AGENTS[currentAgent];
+    const args = [flag, msg.content.trim()];
     if (!isFirst) args.push('--continue');
     isFirst = false;
 
@@ -140,7 +140,7 @@ wss.on('connection', (ws) => {
       busy = false;
       proc = null;
       const hint = err.code === 'ENOENT'
-        ? `"${bin}" not found — check PATH or CLAUDE_BIN`
+        ? `"${bin}" not found — check PATH`
         : err.message;
       send({ type: 'error', message: hint });
     });
