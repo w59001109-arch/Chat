@@ -64,38 +64,55 @@ const server = http.createServer((req, res) => {
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
+const AGENTS = {
+  hermes: CLAUDE_BIN,   // hermes binary (default)
+  claude: 'claude',     // plain claude code
+};
+
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
-  let isFirst = true;   // track whether to pass --continue
-  let busy    = false;
-  let proc    = null;
+  let currentAgent = 'hermes';
+  let isFirst      = true;
+  let busy         = false;
+  let proc         = null;
 
   function send(obj) {
     if (ws.readyState === 1) ws.send(JSON.stringify(obj));
   }
 
-  send({ type: 'system', text: 'HERMES ONLINE — CLAUDE CODE CONNECTED' });
+  send({ type: 'system',       text: 'HERMES ONLINE — CLAUDE CODE CONNECTED' });
+  send({ type: 'agent_status', agent: currentAgent });
 
   ws.on('close', () => { if (proc) proc.kill(); });
 
   ws.on('message', (raw) => {
-    if (busy) return;
-
     let msg;
     try { msg = JSON.parse(raw.toString()); } catch { return; }
+
+    // ── Switch agent ────────────────────────────────────────────────────────
+    if (msg.type === 'switch') {
+      if (busy) { send({ type: 'error', message: 'Cannot switch while processing' }); return; }
+      if (!AGENTS[msg.agent]) return;
+      currentAgent = msg.agent;
+      isFirst = true; // reset conversation when switching
+      send({ type: 'agent_status', agent: currentAgent });
+      send({ type: 'system', text: `SWITCHED TO ${currentAgent.toUpperCase()}` });
+      return;
+    }
+
+    if (busy) return;
     if (msg.type !== 'message' || !msg.content?.trim()) return;
 
     busy = true;
     send({ type: 'start' });
 
-    // Build claude CLI args:
-    //   claude -p "user message" [--continue]
+    const bin  = AGENTS[currentAgent];
     const args = ['-p', msg.content.trim()];
     if (!isFirst) args.push('--continue');
     isFirst = false;
 
-    proc = spawn(CLAUDE_BIN, args, {
+    proc = spawn(bin, args, {
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -105,7 +122,6 @@ wss.on('connection', (ws) => {
       if (text) send({ type: 'delta', text });
     });
 
-    // claude sometimes prints progress/warnings to stderr — ignore unless error
     let stderrBuf = '';
     proc.stderr.on('data', (c) => { stderrBuf += c.toString(); });
 
@@ -115,7 +131,7 @@ wss.on('connection', (ws) => {
       if (code === 0) {
         send({ type: 'done' });
       } else {
-        const errMsg = stripAnsi(stderrBuf).trim() || `claude exited with code ${code}`;
+        const errMsg = stripAnsi(stderrBuf).trim() || `${bin} exited with code ${code}`;
         send({ type: 'error', message: errMsg });
       }
     });
@@ -124,7 +140,7 @@ wss.on('connection', (ws) => {
       busy = false;
       proc = null;
       const hint = err.code === 'ENOENT'
-        ? `"${CLAUDE_BIN}" not found — make sure Claude Code is installed and in PATH`
+        ? `"${bin}" not found — check PATH or CLAUDE_BIN`
         : err.message;
       send({ type: 'error', message: hint });
     });

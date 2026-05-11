@@ -104,6 +104,22 @@
       color: var(--gd);
     }
 
+    /* agent toggle */
+    #agent-btn {
+      background: transparent;
+      border: 1px solid;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      padding: 3px 9px;
+      cursor: pointer;
+      transition: background .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #agent-btn.hermes { border-color: var(--g); color: var(--g); text-shadow: 0 0 6px var(--g); }
+    #agent-btn.claude { border-color: var(--c); color: var(--c); text-shadow: 0 0 6px var(--c); }
+    #agent-btn:active { opacity: .6; }
+
     #clk { font-variant-numeric: tabular-nums; }
 
     #dot {
@@ -279,6 +295,7 @@
 <div id="app">
   <div id="hdr">
     <div id="logo">HERMES</div>
+    <button id="agent-btn" class="hermes">HERMES ⇄</button>
     <div id="hdr-r">
       <span id="clk">--:--:--</span>
       <div id="dot"></div>
@@ -338,16 +355,18 @@
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
 !function () {
-  const msgs  = document.getElementById('msgs');
-  const bar   = document.getElementById('bar');
-  const dot   = document.getElementById('dot');
-  const sta   = document.getElementById('sta');
-  const inp   = document.getElementById('inp');
-  const btn   = document.getElementById('btn');
+  const msgs      = document.getElementById('msgs');
+  const bar       = document.getElementById('bar');
+  const dot       = document.getElementById('dot');
+  const sta       = document.getElementById('sta');
+  const inp       = document.getElementById('inp');
+  const btn       = document.getElementById('btn');
+  const agentBtn  = document.getElementById('agent-btn');
 
   let ws = null, online = false, busy = false;
-  let stream = null;   // { el, text }
+  let stream = null;
   let mid = 0;
+  let currentAgent = 'hermes';
 
   // ── State helpers ──────────────────────────────────────────────────────────
   function setOnline(v) {
@@ -369,7 +388,14 @@
     const ok = online && !busy;
     inp.disabled = !ok;
     btn.disabled = !ok;
+    agentBtn.disabled = !online || busy;
     if (ok) inp.focus();
+  }
+
+  function setAgent(name) {
+    currentAgent = name;
+    agentBtn.className = name;
+    agentBtn.textContent = name.toUpperCase() + ' ⇄';
   }
 
   // ── Message rendering ──────────────────────────────────────────────────────
@@ -386,7 +412,7 @@
   function startStream() {
     const w = document.createElement('div'); w.className = 'm m-a';
     const b = document.createElement('div'); b.className = 'm-box';
-    const t = document.createElement('div'); t.className = 'm-tag'; t.textContent = 'HERMES ▸ PROCESSING';
+    const t = document.createElement('div'); t.className = 'm-tag'; t.textContent = currentAgent.toUpperCase() + ' ▸ PROCESSING';
     const d = document.createElement('div'); d.className = 'm-body';
     const c = document.createElement('span'); c.className = 'cur';
     d.append(c);
@@ -407,7 +433,7 @@
   function endStream() {
     if (stream) {
       stream.bodyEl.textContent = stream.text;
-      stream.tagEl.textContent = 'HERMES ▸ OUTPUT';
+      stream.tagEl.textContent = currentAgent.toUpperCase() + ' ▸ OUTPUT';
       stream = null;
     }
     setBusy(false);
@@ -415,11 +441,12 @@
 
   // ── WebSocket ──────────────────────────────────────────────────────────────
   function handle(d) {
-    if      (d.type === 'system') { addMsg('m-s', 'SYS ▸ INFO',  d.text); setOnline(true); }
-    else if (d.type === 'start')  { startStream(); }
-    else if (d.type === 'delta')  { appendStream(d.text); }
-    else if (d.type === 'done')   { endStream(); }
-    else if (d.type === 'error')  { endStream(); addMsg('m-e', 'SYS ▸ ERROR', d.message); }
+    if      (d.type === 'system')       { addMsg('m-s', 'SYS ▸ INFO', d.text); setOnline(true); }
+    else if (d.type === 'agent_status') { setAgent(d.agent); }
+    else if (d.type === 'start')        { startStream(); }
+    else if (d.type === 'delta')        { appendStream(d.text); }
+    else if (d.type === 'done')         { endStream(); }
+    else if (d.type === 'error')        { endStream(); addMsg('m-e', 'SYS ▸ ERROR', d.message); }
   }
 
   function connect() {
@@ -452,6 +479,12 @@
   }
 
   btn.addEventListener('click', send);
+
+  agentBtn.addEventListener('click', () => {
+    const next = currentAgent === 'hermes' ? 'claude' : 'hermes';
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'switch', agent: next }));
+  });
+
   inp.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   });
