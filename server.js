@@ -19,24 +19,38 @@ const CLAUDE_BIN = process.env.CLAUDE_BIN || 'hermes';
 const TLS_CERT   = process.env.TLS_CERT || '';
 const TLS_KEY    = process.env.TLS_KEY  || '';
 
-// ── PNG icon generator (no deps) ─────────────────────────────────────────────
-function solidPNG(size, r, g, b) {
-  const crcTable = new Uint32Array(256);
+// ── PNG icon generator — black bg + green "H" glyph ──────────────────────────
+function makeIconPNG(size) {
+  const G = [
+    [1,0,0,0,1],
+    [1,0,0,0,1],
+    [1,0,0,0,1],
+    [1,1,1,1,1],
+    [1,0,0,0,1],
+    [1,0,0,0,1],
+    [1,0,0,0,1],
+  ];
+  const GW = 5, GH = 7;
+  const sc = Math.floor(size * 0.55 / GW);
+  const lw = GW * sc, lh = GH * sc;
+  const ox = Math.floor((size - lw) / 2);
+  const oy = Math.floor((size - lh) / 2);
+  const T = new Uint32Array(256);
   for (let i = 0; i < 256; i++) {
     let c = i;
     for (let j = 0; j < 8; j++) c = (c & 1) ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
-    crcTable[i] = c;
+    T[i] = c;
   }
-  function crc32(buf) {
+  function crc32(b) {
     let c = 0xFFFFFFFF;
-    for (const byte of buf) c = crcTable[(c ^ byte) & 0xFF] ^ (c >>> 8);
+    for (const x of b) c = T[(c ^ x) & 0xFF] ^ (c >>> 8);
     return (c ^ 0xFFFFFFFF) >>> 0;
   }
   function chunk(type, data) {
     const t = Buffer.from(type);
     const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
-    const crcBuf = Buffer.alloc(4); crcBuf.writeUInt32BE(crc32(Buffer.concat([t, data])));
-    return Buffer.concat([len, t, data, crcBuf]);
+    const cb = Buffer.alloc(4); cb.writeUInt32BE(crc32(Buffer.concat([t, data])));
+    return Buffer.concat([len, t, data, cb]);
   }
   const rowSize = 1 + size * 3;
   const raw = Buffer.alloc(size * rowSize);
@@ -44,21 +58,24 @@ function solidPNG(size, r, g, b) {
     raw[y * rowSize] = 0;
     for (let x = 0; x < size; x++) {
       const i = y * rowSize + 1 + x * 3;
-      raw[i] = r; raw[i+1] = g; raw[i+2] = b;
+      const lx = x - ox, ly = y - oy;
+      const lit = lx >= 0 && lx < lw && ly >= 0 && ly < lh &&
+                  G[Math.floor(ly / sc)][Math.floor(lx / sc)] === 1;
+      raw[i] = 0; raw[i+1] = lit ? 255 : 0; raw[i+2] = lit ? 65 : 0;
     }
   }
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
   ihdr[8] = 8; ihdr[9] = 2;
   return Buffer.concat([
-    Buffer.from([137,80,78,71,13,10,26,10]),
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     chunk('IHDR', ihdr),
     chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
     chunk('IEND', Buffer.alloc(0)),
   ]);
 }
-const ICON_192 = solidPNG(192, 0, 20, 0);
-const ICON_512 = solidPNG(512, 0, 20, 0);
+const ICON_192 = makeIconPNG(192);
+const ICON_512 = makeIconPNG(512);
 
 // Strip ANSI escape codes from claude CLI output
 function stripAnsi(s) {
