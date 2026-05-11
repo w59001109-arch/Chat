@@ -1,6 +1,8 @@
-const http = require('http');
-const fs   = require('fs');
-const path = require('path');
+const http  = require('http');
+const https = require('https');
+const zlib  = require('zlib');
+const fs    = require('fs');
+const path  = require('path');
 const { spawn } = require('child_process');
 const { WebSocketServer } = require('ws');
 
@@ -14,6 +16,49 @@ process.env.PATH = [
 
 const PORT       = parseInt(process.env.PORT || '3000', 10);
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'hermes';
+const TLS_CERT   = process.env.TLS_CERT || '';
+const TLS_KEY    = process.env.TLS_KEY  || '';
+
+// ── PNG icon generator (no deps) ─────────────────────────────────────────────
+function solidPNG(size, r, g, b) {
+  const crcTable = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    crcTable[i] = c;
+  }
+  function crc32(buf) {
+    let c = 0xFFFFFFFF;
+    for (const byte of buf) c = crcTable[(c ^ byte) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function chunk(type, data) {
+    const t = Buffer.from(type);
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const crcBuf = Buffer.alloc(4); crcBuf.writeUInt32BE(crc32(Buffer.concat([t, data])));
+    return Buffer.concat([len, t, data, crcBuf]);
+  }
+  const rowSize = 1 + size * 3;
+  const raw = Buffer.alloc(size * rowSize);
+  for (let y = 0; y < size; y++) {
+    raw[y * rowSize] = 0;
+    for (let x = 0; x < size; x++) {
+      const i = y * rowSize + 1 + x * 3;
+      raw[i] = r; raw[i+1] = g; raw[i+2] = b;
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([
+    Buffer.from([137,80,78,71,13,10,26,10]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+const ICON_192 = solidPNG(192, 0, 20, 0);
+const ICON_512 = solidPNG(512, 0, 20, 0);
 
 // Strip ANSI escape codes from claude CLI output
 function stripAnsi(s) {
@@ -29,7 +74,12 @@ const MANIFEST = JSON.stringify({
   description: 'Hermes AI Terminal',
   start_url: '/', display: 'standalone',
   background_color: '#000000', theme_color: '#000000',
-  icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' }]
+  orientation: 'portrait',
+  icons: [
+    { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+    { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+    { src: '/icon.svg',     sizes: 'any',     type: 'image/svg+xml' },
+  ]
 });
 
 const ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
@@ -39,9 +89,9 @@ const ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
 <rect x="40" y="430" width="432" height="3" fill="#00ff41" opacity=".4"/>
 </svg>`;
 
-// ── HTTP ─────────────────────────────────────────────────────────────────────
+// ── HTTP(S) handler ───────────────────────────────────────────────────────────
 
-const server = http.createServer((req, res) => {
+function handler(req, res) {
   const url = req.url.split('?')[0];
 
   if (url === '/' || url === '/index.html') {
@@ -55,12 +105,37 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(MANIFEST);
   }
+  if (url === '/sw.js') {
+    try {
+      const sw = fs.readFileSync(path.join(__dirname, 'sw.js'));
+      res.writeHead(200, { 'Content-Type': 'application/javascript', 'Service-Worker-Allowed': '/' });
+      return res.end(sw);
+    } catch { res.writeHead(404); return res.end('Not Found'); }
+  }
   if (url === '/icon.svg') {
     res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
     return res.end(ICON);
   }
+  if (url === '/icon-192.png') {
+    res.writeHead(200, { 'Content-Type': 'image/png' });
+    return res.end(ICON_192);
+  }
+  if (url === '/icon-512.png') {
+    res.writeHead(200, { 'Content-Type': 'image/png' });
+    return res.end(ICON_512);
+  }
   res.writeHead(404); res.end('Not Found');
-});
+}
+
+// Use HTTPS if cert/key provided, otherwise HTTP
+let server;
+if (TLS_CERT && TLS_KEY && fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY)) {
+  server = https.createServer({ cert: fs.readFileSync(TLS_CERT), key: fs.readFileSync(TLS_KEY) }, handler);
+  console.log('\x1b[32m▶ HTTPS mode\x1b[0m');
+} else {
+  server = http.createServer(handler);
+  console.log('\x1b[33m▶ HTTP mode (set TLS_CERT/TLS_KEY for HTTPS + PWA install)\x1b[0m');
+}
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
