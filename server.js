@@ -168,8 +168,8 @@ if (TLS_CERT && TLS_KEY && fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY)) {
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
 const AGENTS = {
-  hermes: { bin: CLAUDE_BIN, sub: 'chat', flag: '-q', extra: ['-Q'] }, // hermes chat -q PROMPT -Q
-  claude: { bin: 'claude',   sub: null,   flag: '-p', extra: []      }, // claude -p PROMPT
+  hermes: { bin: CLAUDE_BIN, sub: 'chat', flag: '-q', extra: ['-Q', '--accept-hooks'] },
+  claude: { bin: 'claude',   sub: null,   flag: '-p', extra: []                       },
 };
 
 const wss = new WebSocketServer({ server });
