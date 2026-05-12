@@ -168,8 +168,8 @@ if (TLS_CERT && TLS_KEY && fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY)) {
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
 const AGENTS = {
-  hermes: { bin: CLAUDE_BIN, sub: 'chat', flag: '-q', extra: ['-Q', '--accept-hooks'] },
-  claude: { bin: 'claude',   sub: null,   flag: '-p', extra: []                       },
+  hermes: { bin: CLAUDE_BIN, sub: null, flag: '-z', extra: [], stdin: false },
+  claude: { bin: 'claude',   sub: null, flag: '-p', extra: [], stdin: false },
 };
 
 const wss = new WebSocketServer({ server });
@@ -213,7 +213,7 @@ wss.on('connection', (ws) => {
     const { bin, sub, flag, extra } = AGENTS[currentAgent];
     const args = [];
     if (sub) args.push(sub);
-    args.push(flag, msg.content.trim());
+    if (flag) args.push(flag, msg.content.trim());
     args.push(...extra);
     if (!isFirst) args.push('--continue');
     isFirst = false;
