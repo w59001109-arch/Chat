@@ -19,71 +19,13 @@
     .msg.error { color: #ff4141; border-color: #ff414144; }
     .typing { align-self: flex-start; padding: 8px 12px; background: #0a1a0a; border: 1px solid #00ff4133; border-radius: 3px; font-size: 14px; color: #00ff4188; display: none; }
     .typing.show { display: block; }
-
-    #input-area { padding: 10px 12px; background: #111; border-top: 1px solid #00ff4133; display: flex; gap: 6px; align-items: flex-end; }
+    #input-area { padding: 10px 12px; background: #111; border-top: 1px solid #00ff4133; display: flex; gap: 8px; align-items: flex-end; }
     #input { flex: 1; background: #0a0a0a; border: 1px solid #00ff4133; border-radius: 3px; color: #00ff41; font-family: 'Courier New', monospace; font-size: 15px; padding: 10px 12px; outline: none; resize: none; line-height: 1.4; max-height: 120px; overflow-y: auto; }
     #input:focus { border-color: #00ff41; }
     #input::placeholder { color: #00ff4155; }
-
-    .icon-btn {
-      background: #001a00;
-      border: 1px solid #00ff4155;
-      color: #00ff41;
-      font-size: 18px;
-      width: 40px;
-      height: 40px;
-      border-radius: 3px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    .icon-btn:hover { background: #002200; border-color: #00ff41; }
-    .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .icon-btn.active { background: #003300; border-color: #00ff41; box-shadow: 0 0 8px #00ff4166; }
-    .icon-btn.recording { background: #1a0000; border-color: #ff4141; color: #ff4141; animation: pulse 1s infinite; }
-
-    #send { background: #001a00; border: 1px solid #00ff41; color: #00ff41; font-family: 'Courier New', monospace; font-size: 14px; padding: 10px 16px; border-radius: 3px; cursor: pointer; white-space: nowrap; height: 40px; }
+    #send { background: #001a00; border: 1px solid #00ff41; color: #00ff41; font-family: 'Courier New', monospace; font-size: 14px; padding: 10px 16px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
     #send:hover { background: #002200; }
     #send:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-
-    #upload-input { display: none; }
-
-    /* Upload progress bar */
-    #upload-status {
-      display: none;
-      align-self: center;
-      padding: 6px 12px;
-      background: #0a1a0a;
-      border: 1px solid #00ff4133;
-      border-radius: 3px;
-      font-size: 12px;
-      color: #00ff4188;
-      text-align: center;
-    }
-    #upload-status.show { display: block; }
-
-    /* Tooltip */
-    .icon-btn { position: relative; }
-    .icon-btn[data-tip]:hover::after {
-      content: attr(data-tip);
-      position: absolute;
-      bottom: 110%;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #111;
-      border: 1px solid #00ff4133;
-      color: #00ff41;
-      font-size: 11px;
-      padding: 3px 7px;
-      border-radius: 3px;
-      white-space: nowrap;
-      pointer-events: none;
-    }
   </style>
 </head>
 <body>
@@ -98,16 +40,8 @@
 </div>
 
 <div id="typing" class="typing">Hermes 思考中...</div>
-<div id="upload-status"></div>
 
 <div id="input-area">
-  <!-- File upload button -->
-  <button class="icon-btn" id="upload-btn" data-tip="上傳音檔/影片" disabled>📎</button>
-  <input type="file" id="upload-input" accept="audio/*,video/*">
-
-  <!-- Microphone button -->
-  <button class="icon-btn" id="mic-btn" data-tip="語音輸入" disabled>🎤</button>
-
   <textarea id="input" placeholder="輸入訊息，按 Enter 傳送" rows="1"></textarea>
   <button id="send" disabled>送出</button>
 </div>
@@ -123,143 +57,12 @@
   const typing = document.getElementById('typing');
   const input = document.getElementById('input');
   const sendBtn = document.getElementById('send');
-  const micBtn = document.getElementById('mic-btn');
-  const uploadBtn = document.getElementById('upload-btn');
-  const uploadInput = document.getElementById('upload-input');
-  const uploadStatus = document.getElementById('upload-status');
 
   let ws = null;
   let sessionToken = '';
   let connected = false;
   let msgId = 0;
 
-  // ── Speech Recognition (Web Speech API) ────────────────────────────────────
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let recognition = null;
-  let isRecording = false;
-
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = 'zh-TW';
-    recognition.interimResults = true;
-    recognition.continuous = false;
-
-    let interimSpan = null;
-
-    recognition.onstart = () => {
-      isRecording = true;
-      micBtn.classList.add('recording');
-      micBtn.dataset.tip = '點擊停止錄音';
-      micBtn.textContent = '🔴';
-    };
-
-    recognition.onresult = (e) => {
-      let interim = '';
-      let final = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) final += t;
-        else interim += t;
-      }
-      // Append final text; show interim as placeholder hint
-      if (final) {
-        input.value += (input.value ? ' ' : '') + final.trim();
-        autoResize();
-      }
-      if (interim) {
-        input.placeholder = interim + '…';
-      }
-    };
-
-    recognition.onend = () => {
-      isRecording = false;
-      micBtn.classList.remove('recording');
-      micBtn.textContent = '🎤';
-      micBtn.dataset.tip = '語音輸入';
-      input.placeholder = '輸入訊息，按 Enter 傳送';
-    };
-
-    recognition.onerror = (e) => {
-      isRecording = false;
-      micBtn.classList.remove('recording');
-      micBtn.textContent = '🎤';
-      const msgs = { 'no-speech': '未偵測到聲音', 'not-allowed': '請允許麥克風權限', 'network': '網路錯誤' };
-      log('語音辨識錯誤：' + (msgs[e.error] || e.error), 'system');
-    };
-  }
-
-  micBtn.addEventListener('click', () => {
-    if (!SpeechRecognition) {
-      log('您的瀏覽器不支援語音辨識（建議使用 Chrome）', 'system');
-      return;
-    }
-    if (isRecording) {
-      recognition.stop();
-    } else {
-      try { recognition.start(); } catch {}
-    }
-  });
-
-  // ── File Upload (audio / video → transcription) ─────────────────────────────
-  uploadBtn.addEventListener('click', () => uploadInput.click());
-
-  uploadInput.addEventListener('change', async () => {
-    const file = uploadInput.files[0];
-    if (!file) return;
-    uploadInput.value = '';
-
-    const maxMB = 100;
-    if (file.size > maxMB * 1024 * 1024) {
-      log(`檔案過大（最大 ${maxMB} MB）`, 'system');
-      return;
-    }
-
-    showUploadStatus(`正在上傳 ${file.name}…`);
-
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      if (sessionToken) fd.append('token', sessionToken);
-
-      const res = await fetch(HTTP_BASE + '/transcribe', {
-        method: 'POST',
-        body: fd,
-      });
-
-      hideUploadStatus();
-
-      if (!res.ok) {
-        const err = await res.text().catch(() => '');
-        log(`轉錄失敗：${res.status} ${err || res.statusText}`, 'error');
-        return;
-      }
-
-      const data = await res.json().catch(async () => ({ text: await res.text() }));
-      const transcribed = data.text || data.transcript || data.result || '';
-
-      if (transcribed) {
-        input.value += (input.value ? '\n' : '') + transcribed;
-        autoResize();
-        input.focus();
-        log(`已轉錄「${file.name}」`, 'system');
-      } else {
-        log('轉錄結果為空', 'system');
-      }
-    } catch (err) {
-      hideUploadStatus();
-      log('上傳失敗：' + err.message, 'error');
-    }
-  });
-
-  function showUploadStatus(msg) {
-    uploadStatus.textContent = msg;
-    uploadStatus.classList.add('show');
-  }
-  function hideUploadStatus() {
-    uploadStatus.classList.remove('show');
-  }
-
-  // ── WebSocket ───────────────────────────────────────────────────────────────
   function log(text, type='system') {
     const el = document.createElement('div');
     el.className = 'msg ' + type;
@@ -309,12 +112,13 @@
     ws.onopen = () => {
       connected = true;
       sendBtn.disabled = false;
-      micBtn.disabled = false;
-      uploadBtn.disabled = false;
       setStatus('已連線', 'connected');
       messages.innerHTML = '';
       log('已連線，正在準備...', 'system');
-      if (sessionToken) sendWs({ type: 'auth', token: sessionToken });
+      // Try to authenticate with session token
+      if (sessionToken) {
+        sendWs({ type: 'auth', token: sessionToken });
+      }
     };
 
     ws.onmessage = (e) => {
@@ -327,47 +131,53 @@
     ws.onclose = () => {
       connected = false;
       sendBtn.disabled = true;
-      micBtn.disabled = true;
-      uploadBtn.disabled = true;
       setStatus('已斷線', 'error');
       log('連線已斷開，請重新整理', 'error');
     };
   }
 
   function init() {
+    // Try to get session token from dashboard HTML
     fetch(HTTP_BASE + '/')
       .then(r => r.text())
       .then(html => {
         const m = html.match(/window\.__HERMES_SESSION_TOKEN__\s*=\s*"([^"])"/);
-        if (m) sessionToken = m[1];
+        if (m) {
+          sessionToken = m[1];
+          log('取得 session token，等待連線...', 'system');
+        }
       })
       .catch(() => {})
-      .finally(() => { connectWs(); });
+      .finally(() => {
+        connectWs();
+      });
 
-    setTimeout(() => { if (!connected) connectWs(); }, 2000);
+    // Fallback: try WebSocket anyway
+    setTimeout(() => {
+      if (!connected) connectWs();
+    }, 2000);
   }
 
-  // ── Send ─────────────────────────────────────────────────────────────────────
   function send() {
     const text = input.value.trim();
     if (!text || !connected) return;
     log(text, 'user');
     input.value = '';
-    autoResize();
     typing.classList.add('show');
     sendWs({ type: 'message', id: ++msgId, content: text, role: 'user' });
   }
 
-  function autoResize() {
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-  }
-
   sendBtn.addEventListener('click', send);
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
   });
-  input.addEventListener('input', autoResize);
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
 
   init();
 })();
